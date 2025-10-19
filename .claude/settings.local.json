@@ -12,7 +12,12 @@
       "Bash(go run main.go --crawlweb --webtype=injdk)",
       "Bash(curl -s \"https://d10.injdk.cn/openjdk/openjdk/11/\")",
       "Bash(curl -s \"https://d10.injdk.cn/openjdk/openjdk/8/\")",
-      "Bash(cat jdkindex.json)"
+      "Bash(cat jdkindex.json)",
+      "Bash(curl -s \"https://mirrors.huaweicloud.com/openjdk/\")",
+      "Bash(curl -s \"https://mirrors.huaweicloud.com/openjdk/11.0.1/\")",
+      "Bash(go run main.go --crawlweb --webtype=huawei)",
+      "Bash(timeout 300 go run main.go --crawlweb --webtype=huawei)",
+      "Bash(timeout 180 go run main.go --crawlweb --webtype=huawei)"
     ],
     "deny": [],
     "ask": []

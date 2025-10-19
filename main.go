@@ -173,7 +173,15 @@ func parseTime(timeStr string) string {
 //   - string: HTML 内容
 //   - error: 错误信息
 func fetchHTML(url string) (string, error) {
-	resp, err := http.Get(url)
+	// 创建请求并设置 User-Agent（某些网站可能检查 User-Agent）
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("创建请求失败: %v", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("获取网页失败: %v", err)
 	}
@@ -309,6 +317,55 @@ func parseFileTable(htmlContent string, pattern string) ([]TWebFileInfo, error) 
 	return files, nil
 }
 
+// parseFileListHuawei 解析华为云的 HTML 文件列表
+// 华为云的 HTML 结构:
+//   - 使用简单的 <pre> 标签格式
+//   - 格式: <a href="filename"...>filename</a> date time size
+//   - 注意：<a> 标签可能跨越多行
+//
+// 参数:
+//   - htmlContent: HTML 内容字符串
+//   - pattern: 正则表达式模式，用于过滤文件名
+//
+// 返回:
+//   - []TWebFileInfo: 文件信息列表
+//   - error: 错误信息
+func parseFileListHuawei(htmlContent string, pattern string) ([]TWebFileInfo, error) {
+	var files []TWebFileInfo
+	var re *regexp.Regexp
+	if pattern != "" {
+		re = regexp.MustCompile(pattern)
+	}
+
+	// 移除换行符，将多行的 <a> 标签合并
+	htmlContent = strings.ReplaceAll(htmlContent, "\n", " ")
+
+	// 正则表达式匹配文件行
+	// 格式: <a href="filename"...>filename</a> date time size
+	lineRe := regexp.MustCompile(`<a\s+href="([^"]+)"[^>]*>([^<]+)</a>\s+(\d{2}-\w{3}-\d{4})\s+(\d{2}:\d{2})\s+([^\s<]+(?:\s+[^\s<]+)?)`)
+
+	matches := lineRe.FindAllStringSubmatch(htmlContent, -1)
+	for _, match := range matches {
+		if len(match) >= 6 {
+			fileName := match[1]
+			date := match[3]
+			time := match[4]
+			size := strings.TrimSpace(match[5])
+
+			// 如果匹配模式，添加到列表
+			if re == nil || re.MatchString(fileName) {
+				files = append(files, TWebFileInfo{
+					Name:         fileName,
+					LastModified: date + " " + time,
+					Size:         size,
+				})
+			}
+		}
+	}
+
+	return files, nil
+}
+
 // parseFileTableInjdk 解析 InJDK 网站的 HTML 表格中的文件信息
 // InJDK 的 HTML 结构:
 //   - 文件名在 <span class="name"> 中
@@ -441,10 +498,22 @@ func getVerDirs(url string) ([]string, error) {
 		return nil, err
 	}
 
-	// 匹配数字开头的目录，支持 "25/" 或 "./25/" 格式
+	// 尝试使用 HTML 解析器
 	links, err := parseLinks(htmlContent, `^(?:\./)?(\d+(?:\.\d+)*)/$`)
 	if err != nil {
 		return nil, err
+	}
+
+	// 如果 HTML 解析器没有找到链接，使用正则表达式直接解析
+	if len(links) == 0 {
+		// 使用正则表达式直接从 HTML 中提取版本目录
+		re := regexp.MustCompile(`<a\s+href="((?:\./)?(\d+(?:\.\d+)*)/)"`)
+		matches := re.FindAllStringSubmatch(htmlContent, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				links = append(links, match[1])
+			}
+		}
 	}
 
 	// 清理链接，移除 "./" 前缀
@@ -1072,6 +1141,144 @@ func (s *TWebInjdk) ParseWebFileName(filename string) (string, string, string, e
 	return goos, goarch, version, nil
 }
 
+// ParseURL 爬取所有 华为云 JDK 下载地址
+// 目录层次:
+//   - /openjdk/11.0.1/openjdk-11.0.1_windows-x64_bin.zip
+//
+// 返回:
+//   - []TOpenJDK: 所有 JDK 下载条目
+//   - error: 错误信息
+func (s *TWebHuawei) ParseURL() ([]TOpenJDK, error) {
+	var allDownloads []TOpenJDK
+
+	// 1. 获取版本目录
+	versions, err := getVerDirs(s.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 遍历每个版本
+	for _, version := range versions {
+		versionURL := s.BaseURL + version
+		// 去除版本号中的 '/' 字符用于显示
+		versionDisplay := strings.TrimSuffix(version, "/")
+		fmt.Println("==================================================")
+		fmt.Printf("-= 处理 JDK %s 版本 =-\n", versionDisplay)
+		fmt.Println("==================================================")
+
+		// 3. 获取 JDK 文件
+		downloads, err := s.GetJDKFiles(versionURL)
+		if err != nil {
+			fmt.Printf("        获取文件失败: %v\n", err)
+			continue
+		}
+
+		// 打印找到的 OpenJDK 信息
+		if len(downloads) > 0 {
+			for _, jdk := range downloads {
+				fmt.Printf("%s\n", jdk.String())
+			}
+		}
+		allDownloads = append(allDownloads, downloads...)
+	}
+
+	return allDownloads, nil
+}
+
+// GetJDKFiles 获取指定 URL 中的所有 JDK 文件下载地址及详细信息
+// 参数:
+//   - fileURL: 文件列表页面的 URL
+//
+// 返回:
+//   - []TOpenJDK: JDK 下载条目列表
+//   - error: 错误信息
+func (s *TWebHuawei) GetJDKFiles(fileURL string) ([]TOpenJDK, error) {
+	htmlContent, err := fetchHTML(fileURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// 使用华为云专用的解析函数，匹配 .zip 和 .tar.gz 文件
+	files, err := parseFileListHuawei(htmlContent, `\.(zip|tar\.gz)$`)
+	if err != nil {
+		return nil, err
+	}
+
+	var downloads []TOpenJDK
+	for _, file := range files {
+		// 从文件名中提取版本号
+		version := extractVersion(file.Name)
+
+		// 格式化时间
+		formattedTime := parseTime(file.LastModified)
+
+		goos, goarch, _, err := s.ParseWebFileName(file.Name)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		downloads = append(downloads, TOpenJDK{
+			Version:      version,
+			Filename:     file.Name,
+			URL:          fileURL + file.Name,
+			Size:         file.Size,
+			LastModified: formattedTime,
+			GOOS:         goos,
+			GOARCH:       goarch,
+		})
+	}
+
+	return downloads, nil
+}
+
+// ParseWebFileName 解析文件名获取GOOS、GOARCH和版本信息
+// 输入:openjdk-10.0.1_windows-x64_bin.tar.gz
+// 返回:Goos,Arch,Version,error
+func (s *TWebHuawei) ParseWebFileName(filename string) (string, string, string, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return "", "", "", fmt.Errorf("文件名不能为空")
+	}
+
+	// 解析文件名获取版本、GOOS和GOARCH
+	filenameParts := strings.Split(filename, "_")
+	if len(filenameParts) < 3 {
+		return "", "", "", fmt.Errorf("文件名格式错误(%s)", filename)
+	}
+
+	version := strings.TrimPrefix(filenameParts[0], "openjdk-")
+	filenameParts1 := strings.Split(filenameParts[1], "-")
+	var goos, goarch string
+	if len(filenameParts1) > 1 {
+		goos = filenameParts1[0]
+		goarch = filenameParts1[1]
+	}
+
+	// 标准化GOOS值
+	goos = strings.ReplaceAll(goos, "osx", "darwin")
+	goos = strings.ReplaceAll(goos, "macos", "darwin")
+	switch goos {
+	case "linux", "darwin", "windows":
+		// 已经是标准值
+	default:
+		return "", "", "", fmt.Errorf("未知操作系统(%s)", goos)
+	}
+
+	// 标准化GOARCH值
+	goarch = strings.ReplaceAll(goarch, "aarch64", "arm64")
+	switch goarch {
+	case "x64", "amd64", "arm64", "aarch64":
+		if goarch == "x64" {
+			goarch = "amd64" // Go标准中使用amd64而不是x64
+		}
+	default:
+		return "", "", "", fmt.Errorf("未知系统架构(%s)", goarch)
+	}
+
+	return goos, goarch, version, nil
+}
+
 // ============================================================
 // Web Server Functions
 // ============================================================
@@ -1322,10 +1529,7 @@ func main() {
 			WebJDK := TWebHuawei{}
 			WebJDK.BaseURL = "https://mirrors.huaweicloud.com/openjdk/"
 			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
-			// 注意: 华为云镜像需要实现 ParseURL() 方法
-			fmt.Println("⚠️  华为云镜像源的 ParseURL() 方法尚未实现")
-			fmt.Println("请先实现 TWebHuawei.ParseURL() 方法")
-			os.Exit(1)
+			downloads, err = WebJDK.ParseURL()
 
 		case "injdk":
 			fmt.Println("\n📦 使用镜像源: InJDK 网站")
