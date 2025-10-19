@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -55,6 +56,11 @@ type TWebHuawei struct {
 
 // injdk 软件镜像站
 type TWebInjdk struct {
+	BaseURL string // 入口地址
+}
+
+// Azul 软件镜像站
+type TWebAzul struct {
 	BaseURL string // 入口地址
 }
 
@@ -1279,6 +1285,33 @@ func (s *TWebHuawei) ParseWebFileName(filename string) (string, string, string, 
 	return goos, goarch, version, nil
 }
 
+type TAzulJDK struct {
+	PackageUUID        string `json:"package_uuid"`
+	Name               string `json:"name"`
+	JavaVersion        []int  `json:"java_version"`
+	OpenjdkBuildNumber int    `json:"openjdk_build_number"`
+	Latest             bool   `json:"latest"`
+	DownloadURL        string `json:"download_url"`
+	Product            string `json:"product"`
+	DistroVersion      []int  `json:"distro_version"`
+	AvailabilityType   string `json:"availability_type"`
+	ShortName          string
+}
+
+// ParseURL 爬取所有 Azul JDK 下载地址
+// curl "https://api.azul.com/metadata/v1/zulu/packages?os=windows&arch=amd64&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=100"|jq
+// 通过API直接返回JDK地址
+//
+// 返回:
+//   - []TOpenJDK: 所有 JDK 下载条目
+//   - error: 错误信息
+func (s *TWebAzul) ParseURL() ([]TOpenJDK, error) {
+	//https://api.azul.com/metadata/v1/docs/swagger
+	var api = s.BaseURL + "?os=$OS&arch=$ARCH&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=100"
+	api = strings.Replace(api, "$OS", runtime.GOOS, 1)
+	api = strings.Replace(api, "$ARCH", runtime.GOARCH, 1)
+}
+
 // ============================================================
 // Web Server Functions
 // ============================================================
@@ -1535,6 +1568,13 @@ func main() {
 			fmt.Println("\n📦 使用镜像源: InJDK 网站")
 			WebJDK := TWebInjdk{}
 			WebJDK.BaseURL = "https://d10.injdk.cn/openjdk/openjdk/"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			downloads, err = WebJDK.ParseURL()
+
+		case "azul":
+			fmt.Println("\n📦 使用镜像源: AZul 网站")
+			WebJDK := TWebAzul{}
+			WebJDK.BaseURL = "https://api.azul.com/metadata/v1/zulu/packages"
 			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
 			downloads, err = WebJDK.ParseURL()
 
