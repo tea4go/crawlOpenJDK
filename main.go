@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -1295,21 +1294,155 @@ type TAzulJDK struct {
 	Product            string `json:"product"`
 	DistroVersion      []int  `json:"distro_version"`
 	AvailabilityType   string `json:"availability_type"`
-	ShortName          string
 }
 
 // ParseURL 爬取所有 Azul JDK 下载地址
-// curl "https://api.azul.com/metadata/v1/zulu/packages?os=windows&arch=amd64&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=100"|jq
-// 通过API直接返回JDK地址
+// Azul 提供 REST API，可以直接获取 JDK 下载地址
+// API 文档: https://api.azul.com/metadata/v1/docs/swagger
 //
 // 返回:
 //   - []TOpenJDK: 所有 JDK 下载条目
 //   - error: 错误信息
 func (s *TWebAzul) ParseURL() ([]TOpenJDK, error) {
-	//https://api.azul.com/metadata/v1/docs/swagger
-	var api = s.BaseURL + "?os=$OS&arch=$ARCH&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=100"
-	api = strings.Replace(api, "$OS", runtime.GOOS, 1)
-	api = strings.Replace(api, "$ARCH", runtime.GOARCH, 1)
+	var allDownloads []TOpenJDK
+
+	// 支持的操作系统和架构组合
+	targets := []struct {
+		os   string
+		arch string
+		goos string
+		goarch string
+	}{
+		{"windows", "x86", "windows", "amd64"},
+		{"windows", "arm", "windows", "arm64"},
+		{"linux", "x86", "linux", "amd64"},
+		{"linux", "arm", "linux", "arm64"},
+		{"macos", "x86", "darwin", "amd64"},
+		{"macos", "arm", "darwin", "arm64"},
+	}
+
+	// 遍历每个目标平台
+	for _, target := range targets {
+		fmt.Println("==================================================")
+		fmt.Printf("-= 获取 %s/%s 的 JDK 列表 =-\n", target.goos, target.goarch)
+		fmt.Println("==================================================")
+
+		// 构建 API URL
+		apiURL := fmt.Sprintf("%s?os=%s&arch=%s&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=100",
+			s.BaseURL, target.os, target.arch)
+
+		// 获取 JDK 列表
+		downloads, err := s.FetchJDKList(apiURL, target.goos, target.goarch)
+		if err != nil {
+			fmt.Printf("  获取失败: %v\n", err)
+			continue
+		}
+
+		// 打印找到的 JDK 信息
+		if len(downloads) > 0 {
+			for _, jdk := range downloads {
+				fmt.Printf("%s\n", jdk.String())
+			}
+		}
+		allDownloads = append(allDownloads, downloads...)
+	}
+
+	return allDownloads, nil
+}
+
+// FetchJDKList 从 Azul API 获取 JDK 列表
+// 参数:
+//   - apiURL: API 地址
+//   - goos: 操作系统标准名称
+//   - goarch: 架构标准名称
+//
+// 返回:
+//   - []TOpenJDK: JDK 下载条目列表
+//   - error: 错误信息
+func (s *TWebAzul) FetchJDKList(apiURL string, goos string, goarch string) ([]TOpenJDK, error) {
+	// 创建 HTTP 请求
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
+	// 发送请求
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// 读取响应
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	// 解析 JSON
+	var azulJDKs []TAzulJDK
+	err = json.Unmarshal(body, &azulJDKs)
+	if err != nil {
+		return nil, fmt.Errorf("解析 JSON 失败: %v", err)
+	}
+
+	// 转换为 TOpenJDK 格式
+	var downloads []TOpenJDK
+	for _, azulJDK := range azulJDKs {
+		// 跳过包含 crac 的版本（这是特殊版本）
+		if strings.Contains(azulJDK.Name, "-crac-") {
+			continue
+		}
+
+		// 提取版本号
+		version := s.ExtractVersion(azulJDK.JavaVersion)
+
+		// 提取文件大小（从 URL 获取，如果可能的话）
+		size := "Unknown"
+
+		// 使用当前时间作为最后修改时间
+		lastModified := time.Now().Format("2006-01-02 15:04")
+
+		downloads = append(downloads, TOpenJDK{
+			Version:      version,
+			Filename:     azulJDK.Name,
+			URL:          azulJDK.DownloadURL,
+			Size:         size,
+			LastModified: lastModified,
+			GOOS:         goos,
+			GOARCH:       goarch,
+		})
+	}
+
+	return downloads, nil
+}
+
+// ExtractVersion 从 JavaVersion 数组中提取版本号字符串
+// 参数:
+//   - javaVersion: Java 版本数组 [major, minor, patch]
+//
+// 返回:
+//   - string: 版本号字符串
+func (s *TWebAzul) ExtractVersion(javaVersion []int) string {
+	if len(javaVersion) == 0 {
+		return "unknown"
+	}
+
+	// 主版本号
+	major := javaVersion[0]
+
+	// 如果有次版本号和补丁版本号
+	if len(javaVersion) >= 3 {
+		minor := javaVersion[1]
+		patch := javaVersion[2]
+		if minor > 0 || patch > 0 {
+			return fmt.Sprintf("%d.%d.%d", major, minor, patch)
+		}
+	}
+
+	return fmt.Sprintf("%d", major)
 }
 
 // ============================================================
@@ -1498,7 +1631,7 @@ func main() {
 	// 定义命令行参数
 	isWebServer := flag.Bool("webserver", false, "启动 Web 服务器模式")
 	isCrawlWeb := flag.Bool("crawlweb", false, "启动爬取 OpenJDK 模式")
-	webType := flag.String("webtype", "lzu", "选择镜像源类型: lzu(兰州大学), tuna(清华大学), injdk(InJDK网站), huawei(华为镜像站)")
+	webType := flag.String("webtype", "lzu", "选择镜像源类型: lzu(兰州大学), tuna(清华大学), injdk(InJDK网站), huawei(华为镜像站), azul(Azul Zulu)")
 
 	// 解析命令行参数
 	flag.Parse()
@@ -1511,18 +1644,20 @@ func main() {
 		fmt.Println("\n使用方法:")
 		fmt.Println("  --webserver    启动 Web 服务器")
 		fmt.Println("  --crawlweb     爬取 OpenJDK 下载地址")
-		fmt.Println("  --webtype      选择镜像源 (lzu/tuna/injdk/huawei)")
+		fmt.Println("  --webtype      选择镜像源 (lzu/tuna/injdk/huawei/azul)")
 		fmt.Println("\n示例:")
 		fmt.Println("  go run main.go --webserver")
 		fmt.Println("  go run main.go --crawlweb --webtype=lzu")
 		fmt.Println("  go run main.go --crawlweb --webtype=tuna")
 		fmt.Println("  go run main.go --crawlweb --webtype=huawei")
 		fmt.Println("  go run main.go --crawlweb --webtype=injdk")
+		fmt.Println("  go run main.go --crawlweb --webtype=azul")
 		fmt.Println("\n可用的镜像源:")
 		fmt.Println("  lzu    - 兰州大学开源软件镜像站")
 		fmt.Println("  tuna   - 清华大学开源软件镜像站")
 		fmt.Println("  injdk  - InJDK 网站")
 		fmt.Println("  huawei - 华为云镜像站")
+		fmt.Println("  azul   - Azul Zulu OpenJDK")
 		os.Exit(0)
 	}
 
@@ -1585,6 +1720,7 @@ func main() {
 			fmt.Println("  tuna   - 清华大学开源软件镜像站")
 			fmt.Println("  injdk  - InJDK 网站")
 			fmt.Println("  huawei - 华为云镜像站")
+			fmt.Println("  azul   - Azul Zulu OpenJDK")
 			os.Exit(1)
 		}
 

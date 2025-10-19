@@ -17,7 +17,18 @@
       "Bash(curl -s \"https://mirrors.huaweicloud.com/openjdk/11.0.1/\")",
       "Bash(go run main.go --crawlweb --webtype=huawei)",
       "Bash(timeout 300 go run main.go --crawlweb --webtype=huawei)",
-      "Bash(timeout 180 go run main.go --crawlweb --webtype=huawei)"
+      "Bash(timeout 180 go run main.go --crawlweb --webtype=huawei)",
+      "Bash(curl -s \"https://api.azul.com/metadata/v1/zulu/packages?os=windows&arch=x86&archive_type=zip&java_package_type=jdk&javafx_bundled=false&latest=true&release_status=ga&availability_types=CA&certifications=tck&page=1&page_size=5\")",
+      "Bash(go run main.go --crawlweb --webtype=azul)",
+      "Bash(timeout 120 go run main.go --crawlweb --webtype=azul)",
+      "Bash(go run main.go)",
+      "Bash(for source in lzu tuna huawei injdk azul)",
+      "Bash(do echo \"\")",
+      "Bash(echo \"=== 测试 $source ===\")",
+      "Bash(timeout 60 go run main.go --crawlweb --webtype=$source)",
+      "Bash(done)",
+      "Bash(timeout 30 go run main.go --crawlweb --webtype=injdk)",
+      "Bash(timeout 30 go run main.go --crawlweb --webtype=azul)"
     ],
     "deny": [],
     "ask": []
