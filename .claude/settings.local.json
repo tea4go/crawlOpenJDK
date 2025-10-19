@@ -28,7 +28,10 @@
       "Bash(timeout 60 go run main.go --crawlweb --webtype=$source)",
       "Bash(done)",
       "Bash(timeout 30 go run main.go --crawlweb --webtype=injdk)",
-      "Bash(timeout 30 go run main.go --crawlweb --webtype=azul)"
+      "Bash(timeout 30 go run main.go --crawlweb --webtype=azul)",
+      "Bash(curl -s \"https://api.adoptium.net/v3/info/available_releases\")",
+      "Bash(curl -s \"https://api.adoptium.net/v3/assets/latest/21/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse\")",
+      "Bash(timeout 120 go run main.go --crawlweb --webtype=adoptium)"
     ],
     "deny": [],
     "ask": []

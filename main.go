@@ -63,6 +63,11 @@ type TWebAzul struct {
 	BaseURL string // 入口地址
 }
 
+// Adoptium 软件镜像站
+type TWebAdoptium struct {
+	BaseURL string // 入口地址
+}
+
 // TWebFileInfo 表示从 HTML 表格中解析出的文件信息
 type TWebFileInfo struct {
 	Name         string // 文件名
@@ -1446,6 +1451,203 @@ func (s *TWebAzul) ExtractVersion(javaVersion []int) string {
 }
 
 // ============================================================
+// Adoptium API 相关代码
+// ============================================================
+
+// TAdoptiumReleases 表示 Adoptium 的可用版本响应
+type TAdoptiumReleases struct {
+	AvailableReleases []int `json:"available_releases"`
+}
+
+// TAdoptiumAsset 表示 Adoptium 的资源响应
+type TAdoptiumAsset struct {
+	Binary struct {
+		Architecture string `json:"architecture"`
+		ImageType    string `json:"image_type"`
+		OS           string `json:"os"`
+		Package      struct {
+			Name string `json:"name"`
+			Link string `json:"link"`
+			Size int64  `json:"size"`
+		} `json:"package"`
+		UpdatedAt string `json:"updated_at"`
+	} `json:"binary"`
+	Version struct {
+		Major          int    `json:"major"`
+		Minor          int    `json:"minor"`
+		Security       int    `json:"security"`
+		OpenjdkVersion string `json:"openjdk_version"`
+	} `json:"version"`
+}
+
+// ParseURL 爬取所有 Adoptium JDK 下载地址
+// Adoptium 提供 REST API，可以直接获取 JDK 下载地址
+// API 文档: https://api.adoptium.net/q/swagger-ui/
+//
+// 返回:
+//   - []TOpenJDK: 所有 JDK 下载条目
+//   - error: 错误信息
+func (s *TWebAdoptium) ParseURL() ([]TOpenJDK, error) {
+	var allDownloads []TOpenJDK
+
+	// 1. 获取所有可用的版本
+	releases, err := s.GetAvailableReleases()
+	if err != nil {
+		return nil, fmt.Errorf("获取可用版本失败: %v", err)
+	}
+
+	fmt.Printf("找到 %d 个可用版本\n\n", len(releases))
+
+	// 支持的操作系统和架构组合
+	targets := []struct {
+		os     string
+		arch   string
+		goos   string
+		goarch string
+	}{
+		{"windows", "x64", "windows", "amd64"},
+		{"windows", "aarch64", "windows", "arm64"},
+		{"linux", "x64", "linux", "amd64"},
+		{"linux", "aarch64", "linux", "arm64"},
+		{"mac", "x64", "darwin", "amd64"},
+		{"mac", "aarch64", "darwin", "arm64"},
+	}
+
+	// 2. 遍历每个版本
+	for _, version := range releases {
+		fmt.Println("==================================================")
+		fmt.Printf("-= 处理 JDK %d 版本 =-\n", version)
+		fmt.Println("==================================================")
+
+		// 遍历每个目标平台
+		for _, target := range targets {
+			// 获取该版本和平台的 JDK
+			downloads, err := s.FetchJDKForPlatform(version, target.os, target.arch, target.goos, target.goarch)
+			if err != nil {
+				continue // 某些版本可能不支持某些平台
+			}
+
+			// 打印找到的 JDK 信息
+			for _, jdk := range downloads {
+				fmt.Printf("%s\n", jdk.String())
+			}
+			allDownloads = append(allDownloads, downloads...)
+		}
+	}
+
+	return allDownloads, nil
+}
+
+// GetAvailableReleases 获取所有可用的版本
+// 返回:
+//   - []int: 版本号列表
+//   - error: 错误信息
+func (s *TWebAdoptium) GetAvailableReleases() ([]int, error) {
+	apiURL := "https://api.adoptium.net/v3/info/available_releases"
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	var releases TAdoptiumReleases
+	err = json.Unmarshal(body, &releases)
+	if err != nil {
+		return nil, fmt.Errorf("解析 JSON 失败: %v", err)
+	}
+
+	return releases.AvailableReleases, nil
+}
+
+// FetchJDKForPlatform 获取指定版本和平台的 JDK
+// 参数:
+//   - version: JDK 版本号
+//   - os: 操作系统 (windows, linux, mac)
+//   - arch: 架构 (x64, aarch64)
+//   - goos: Go 标准操作系统名称
+//   - goarch: Go 标准架构名称
+//
+// 返回:
+//   - []TOpenJDK: JDK 下载条目列表
+//   - error: 错误信息
+func (s *TWebAdoptium) FetchJDKForPlatform(version int, os, arch, goos, goarch string) ([]TOpenJDK, error) {
+	// 构建 API URL
+	apiURL := fmt.Sprintf("https://api.adoptium.net/v3/assets/latest/%d/hotspot?architecture=%s&image_type=jdk&os=%s&vendor=eclipse",
+		version, arch, os)
+
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建请求失败: %v", err)
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("请求失败: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取响应失败: %v", err)
+	}
+
+	// 解析 JSON
+	var assets []TAdoptiumAsset
+	err = json.Unmarshal(body, &assets)
+	if err != nil {
+		return nil, fmt.Errorf("解析 JSON 失败: %v", err)
+	}
+
+	// 转换为 TOpenJDK 格式
+	var downloads []TOpenJDK
+	for _, asset := range assets {
+		// 只处理 package (zip/tar.gz)，不处理 installer (msi/pkg)
+		if asset.Binary.Package.Link == "" {
+			continue
+		}
+
+		// 提取版本号
+		versionStr := asset.Version.OpenjdkVersion
+		if versionStr == "" {
+			versionStr = fmt.Sprintf("%d.%d.%d", asset.Version.Major, asset.Version.Minor, asset.Version.Security)
+		}
+
+		// 格式化文件大小
+		size := formatFileSize(fmt.Sprintf("%d", asset.Binary.Package.Size))
+
+		// 格式化时间
+		lastModified := parseTime(asset.Binary.UpdatedAt)
+
+		downloads = append(downloads, TOpenJDK{
+			Version:      versionStr,
+			Filename:     asset.Binary.Package.Name,
+			URL:          asset.Binary.Package.Link,
+			Size:         size,
+			LastModified: lastModified,
+			GOOS:         goos,
+			GOARCH:       goarch,
+		})
+	}
+
+	return downloads, nil
+}
+
+// ============================================================
 // Web Server Functions
 // ============================================================
 
@@ -1631,7 +1833,7 @@ func main() {
 	// 定义命令行参数
 	isWebServer := flag.Bool("webserver", false, "启动 Web 服务器模式")
 	isCrawlWeb := flag.Bool("crawlweb", false, "启动爬取 OpenJDK 模式")
-	webType := flag.String("webtype", "lzu", "选择镜像源类型: lzu(兰州大学), tuna(清华大学), injdk(InJDK网站), huawei(华为镜像站), azul(Azul Zulu)")
+	webType := flag.String("webtype", "lzu", "选择镜像源类型: lzu(兰州大学), tuna(清华大学), injdk(InJDK网站), huawei(华为镜像站), azul(Azul Zulu), adoptium(Eclipse Adoptium)")
 
 	// 解析命令行参数
 	flag.Parse()
@@ -1644,7 +1846,7 @@ func main() {
 		fmt.Println("\n使用方法:")
 		fmt.Println("  --webserver    启动 Web 服务器")
 		fmt.Println("  --crawlweb     爬取 OpenJDK 下载地址")
-		fmt.Println("  --webtype      选择镜像源 (lzu/tuna/injdk/huawei/azul)")
+		fmt.Println("  --webtype      选择镜像源 (lzu/tuna/injdk/huawei/azul/adoptium)")
 		fmt.Println("\n示例:")
 		fmt.Println("  go run main.go --webserver")
 		fmt.Println("  go run main.go --crawlweb --webtype=lzu")
@@ -1652,12 +1854,14 @@ func main() {
 		fmt.Println("  go run main.go --crawlweb --webtype=huawei")
 		fmt.Println("  go run main.go --crawlweb --webtype=injdk")
 		fmt.Println("  go run main.go --crawlweb --webtype=azul")
+		fmt.Println("  go run main.go --crawlweb --webtype=adoptium")
 		fmt.Println("\n可用的镜像源:")
-		fmt.Println("  lzu    - 兰州大学开源软件镜像站")
-		fmt.Println("  tuna   - 清华大学开源软件镜像站")
-		fmt.Println("  injdk  - InJDK 网站")
-		fmt.Println("  huawei - 华为云镜像站")
-		fmt.Println("  azul   - Azul Zulu OpenJDK")
+		fmt.Println("  lzu      - 兰州大学开源软件镜像站")
+		fmt.Println("  tuna     - 清华大学开源软件镜像站")
+		fmt.Println("  injdk    - InJDK 网站")
+		fmt.Println("  huawei   - 华为云镜像站")
+		fmt.Println("  azul     - Azul Zulu OpenJDK")
+		fmt.Println("  adoptium - Eclipse Adoptium (原 AdoptOpenJDK)")
 		os.Exit(0)
 	}
 
@@ -1707,20 +1911,28 @@ func main() {
 			downloads, err = WebJDK.ParseURL()
 
 		case "azul":
-			fmt.Println("\n📦 使用镜像源: AZul 网站")
+			fmt.Println("\n📦 使用镜像源: Azul Zulu")
 			WebJDK := TWebAzul{}
 			WebJDK.BaseURL = "https://api.azul.com/metadata/v1/zulu/packages"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			downloads, err = WebJDK.ParseURL()
+
+		case "adoptium":
+			fmt.Println("\n📦 使用镜像源: Eclipse Adoptium")
+			WebJDK := TWebAdoptium{}
+			WebJDK.BaseURL = "https://api.adoptium.net/v3"
 			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
 			downloads, err = WebJDK.ParseURL()
 
 		default:
 			fmt.Printf("❌ 错误: 未知的镜像源类型 '%s'\n", *webType)
 			fmt.Println("\n可用的镜像源:")
-			fmt.Println("  lzu    - 兰州大学开源软件镜像站")
-			fmt.Println("  tuna   - 清华大学开源软件镜像站")
-			fmt.Println("  injdk  - InJDK 网站")
-			fmt.Println("  huawei - 华为云镜像站")
-			fmt.Println("  azul   - Azul Zulu OpenJDK")
+			fmt.Println("  lzu      - 兰州大学开源软件镜像站")
+			fmt.Println("  tuna     - 清华大学开源软件镜像站")
+			fmt.Println("  injdk    - InJDK 网站")
+			fmt.Println("  huawei   - 华为云镜像站")
+			fmt.Println("  azul     - Azul Zulu OpenJDK")
+			fmt.Println("  adoptium - Eclipse Adoptium")
 			os.Exit(1)
 		}
 
