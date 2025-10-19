@@ -770,6 +770,15 @@ func main() {
 
 	WebJDK2 := TWebLzu{}
 	WebJDK2.BaseURL = "https://mirror4.lzu.edu.cn/openjdk/"
+	fmt.Println(WebJDK2.BaseURL)
+
+	WebJDK3 := TWebHuawei{}
+	WebJDK3.BaseURL = "https://mirrors.huaweicloud.com/openjdk/"
+	fmt.Println(WebJDK3.BaseURL)
+
+	WebJDK4 := TWebInjdk{}
+	WebJDK4.BaseURL = "https://d10.injdk.cn/openjdk/openjdk/"
+	fmt.Println(WebJDK4.BaseURL)
 
 	// 爬取所有 JDK 下载地址
 	downloads, err := WebJDK2.ParseURL()
