@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenJDK 下载中心</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.95;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            display: block;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            margin-top: 5px;
+            font-size: 0.9em;
+        }
+
+        .filters {
+            padding: 30px;
+            background: white;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 80px;
+        }
+
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 20px;
+            border: 2px solid #dee2e6;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .filter-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .filter-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .search-box {
+            width: 100%;
+            margin-top: 20px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 25px;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+            font-size: 1.2em;
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95em;
+        }
+
+        thead {
+            background: #f8f9fa;
+            position: sticky;
+            top: 0;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        tr:hover {
+            background: #f8f9ff;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+
+        .badge-version {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .badge-os {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .badge-arch {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 500;
+            transition: all 0.3s;
+            font-size: 0.9em;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .filename {
+            font-weight: 500;
+            color: #212529;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 60px;
+            color: #6c757d;
+        }
+
+        .no-results-icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .filter-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .filter-label {
+                min-width: auto;
+            }
+
+            table {
+                font-size: 0.85em;
+            }
+
+            th, td {
+                padding: 10px;
+            }
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            background: #f8f9fa;
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+
+        .footer a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>☕ OpenJDK 下载中心</h1>
+            <p>快速获取最新的 OpenJDK 发行版</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-number" id="totalCount">0</span>
+                <span class="stat-label">总下载数</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="versionCount">0</span>
+                <span class="stat-label">JDK 版本</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="osCount">3</span>
+                <span class="stat-label">操作系统</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number" id="archCount">2</span>
+                <span class="stat-label">系统架构</span>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters">
+            <div class="filter-group">
+                <span class="filter-label">版本:</span>
+                <div class="filter-buttons" id="versionFilters">
+                    <button class="filter-btn active" data-filter="all">全部</button>
+                </div>
+            </div>
+
+            <div class="filter-group" style="margin-top: 15px;">
+                <span class="filter-label">系统:</span>
+                <div class="filter-buttons" id="osFilters">
+                    <button class="filter-btn active" data-filter="all">全部</button>
+                    <button class="filter-btn" data-filter="windows">Windows</button>
+                    <button class="filter-btn" data-filter="darwin">macOS</button>
+                    <button class="filter-btn" data-filter="linux">Linux</button>
+                </div>
+            </div>
+
+            <div class="filter-group" style="margin-top: 15px;">
+                <span class="filter-label">架构:</span>
+                <div class="filter-buttons" id="archFilters">
+                    <button class="filter-btn active" data-filter="all">全部</button>
+                    <button class="filter-btn" data-filter="amd64">x64 (amd64)</button>
+                    <button class="filter-btn" data-filter="arm64">ARM64</button>
+                </div>
+            </div>
+
+            <div class="search-box">
+                <input type="text" class="search-input" id="searchInput" placeholder="🔍 搜索文件名、版本号...">
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <div class="loading" id="loading">
+                ⏳ 加载中...
+            </div>
+
+            <div class="table-container" id="tableContainer" style="display: none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>版本</th>
+                            <th>文件名</th>
+                            <th>文件大小</th>
+                            <th>操作系统</th>
+                            <th>架构</th>
+                            <th>更新时间</th>
+                            <th>下载</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="no-results" id="noResults" style="display: none;">
+                <div class="no-results-icon">🔍</div>
+                <h3>未找到匹配的结果</h3>
+                <p>请尝试调整筛选条件或搜索关键词</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>数据来源: <a href="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/" target="_blank">清华大学 Adoptium 镜像站</a></p>
+            <p style="margin-top: 10px;">🤖 Generated with Claude Code</p>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let currentFilters = {
+            version: 'all',
+            os: 'all',
+            arch: 'all',
+            search: ''
+        };
+
+        // 加载 JSON 数据
+        async function loadData() {
+            try {
+                const response = await fetch('jdkindex.json');
+                allData = await response.json();
+                filteredData = [...allData];
+
+                // 更新统计信息
+                updateStats();
+
+                // 生成版本过滤器
+                generateVersionFilters();
+
+                // 渲染表格
+                renderTable();
+
+                // 隐藏加载提示
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('tableContainer').style.display = 'block';
+            } catch (error) {
+                document.getElementById('loading').innerHTML = '❌ 加载失败: ' + error.message;
+            }
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const versions = new Set(allData.map(item => item.version));
+            document.getElementById('totalCount').textContent = allData.length;
+            document.getElementById('versionCount').textContent = versions.size;
+        }
+
+        // 生成版本过滤器
+        function generateVersionFilters() {
+            const versions = [...new Set(allData.map(item => item.version))].sort().reverse();
+            const container = document.getElementById('versionFilters');
+
+            versions.forEach(version => {
+                const btn = document.createElement('button');
+                btn.className = 'filter-btn';
+                btn.dataset.filter = version;
+                btn.textContent = 'JDK ' + version;
+                btn.addEventListener('click', () => filterByVersion(version, btn));
+                container.appendChild(btn);
+            });
+        }
+
+        // 版本过滤
+        function filterByVersion(version, btn) {
+            currentFilters.version = version;
+
+            // 更新按钮状态
+            document.querySelectorAll('#versionFilters .filter-btn').forEach(b => {
+                b.classList.remove('active');
+            });
+            btn.classList.add('active');
+
+            applyFilters();
+        }
+
+        // 系统过滤
+        document.getElementById('osFilters').addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-btn')) {
+                currentFilters.os = e.target.dataset.filter;
+
+                document.querySelectorAll('#osFilters .filter-btn').forEach(b => {
+                    b.classList.remove('active');
+                });
+                e.target.classList.add('active');
+
+                applyFilters();
+            }
+        });
+
+        // 架构过滤
+        document.getElementById('archFilters').addEventListener('click', (e) => {
+            if (e.target.classList.contains('filter-btn')) {
+                currentFilters.arch = e.target.dataset.filter;
+
+                document.querySelectorAll('#archFilters .filter-btn').forEach(b => {
+                    b.classList.remove('active');
+                });
+                e.target.classList.add('active');
+
+                applyFilters();
+            }
+        });
+
+        // 搜索
+        document.getElementById('searchInput').addEventListener('input', (e) => {
+            currentFilters.search = e.target.value.toLowerCase();
+            applyFilters();
+        });
+
+        // 应用所有过滤器
+        function applyFilters() {
+            filteredData = allData.filter(item => {
+                // 版本过滤
+                if (currentFilters.version !== 'all' && item.version !== currentFilters.version) {
+                    return false;
+                }
+
+                // 系统过滤
+                if (currentFilters.os !== 'all' && item.goos !== currentFilters.os) {
+                    return false;
+                }
+
+                // 架构过滤
+                if (currentFilters.arch !== 'all' && item.goarch !== currentFilters.arch) {
+                    return false;
+                }
+
+                // 搜索过滤
+                if (currentFilters.search) {
+                    const searchText = (item.filename + item.version).toLowerCase();
+                    if (!searchText.includes(currentFilters.search)) {
+                        return false;
+                    }
+                }
+
+                return true;
+            });
+
+            renderTable();
+        }
+
+        // 渲染表格
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const noResults = document.getElementById('noResults');
+            const tableContainer = document.getElementById('tableContainer');
+
+            if (filteredData.length === 0) {
+                tableContainer.style.display = 'none';
+                noResults.style.display = 'block';
+                return;
+            }
+
+            tableContainer.style.display = 'block';
+            noResults.style.display = 'none';
+
+            tbody.innerHTML = filteredData.map(item => {
+                const osName = {
+                    'windows': 'Windows',
+                    'darwin': 'macOS',
+                    'linux': 'Linux'
+                }[item.goos] || item.goos;
+
+                const archName = {
+                    'amd64': 'x64',
+                    'arm64': 'ARM64'
+                }[item.goarch] || item.goarch;
+
+                return `
+                    <tr>
+                        <td><span class="badge badge-version">JDK ${item.version}</span></td>
+                        <td><span class="filename">${item.filename}</span></td>
+                        <td>${item.size}</td>
+                        <td><span class="badge badge-os">${osName}</span></td>
+                        <td><span class="badge badge-arch">${archName}</span></td>
+                        <td>${item.last_modified}</td>
+                        <td>
+                            <a href="${item.url}" class="download-btn" download>
+                                ⬇️ 下载
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 页面加载时初始化
+        window.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

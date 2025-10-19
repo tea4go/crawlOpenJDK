@@ -1,0 +1,23 @@
+{
+    "recommendations": [
+        // Go 开发必备
+        "golang.go",
+
+        // 代码质量
+        "streetsidesoftware.code-spell-checker",
+        "editorconfig.editorconfig",
+
+        // Web 开发
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+
+        // 实用工具
+        "eamodio.gitlens",
+        "ms-vscode.live-server",
+        "ritwickdey.liveserver",
+
+        // Markdown
+        "yzhang.markdown-all-in-one",
+        "davidanson.vscode-markdownlint"
+    ]
+}

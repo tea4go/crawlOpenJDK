@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go mod init wget_jdk)",
+      "Bash(go mod tidy)",
+      "Bash(go run main.go)",
+      "Bash(dir index.html)",
+      "Bash(go run server.go)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(curl -s http://localhost:8080/jdkindex.json)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

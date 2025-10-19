@@ -1,0 +1,58 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "运行爬虫程序",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true
+        },
+        {
+            "name": "运行 Web 服务器",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/server.go",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true,
+            "env": {
+                "PORT": "8080"
+            }
+        },
+        {
+            "name": "运行 Web 服务器 (自定义端口)",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/server.go",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true,
+            "env": {
+                "PORT": "3000"
+            }
+        },
+        {
+            "name": "调试当前文件",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true
+        },
+        {
+            "name": "附加到进程",
+            "type": "go",
+            "request": "attach",
+            "mode": "local",
+            "processId": 0
+        }
+    ]
+}

@@ -1,0 +1,92 @@
+[
+  {
+    "version": "20.0.2",
+    "filename": "openjdk-20.0.2_linux-aarch64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.2/openjdk-20.0.2_linux-aarch64_bin.tar.gz",
+    "size": "187 MiB",
+    "last_modified": "2023-06-26 07:00",
+    "goos": "linux",
+    "goarch": "arm64"
+  },
+  {
+    "version": "20.0.2",
+    "filename": "openjdk-20.0.2_linux-x64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.2/openjdk-20.0.2_linux-x64_bin.tar.gz",
+    "size": "189 MiB",
+    "last_modified": "2023-06-26 06:59",
+    "goos": "linux",
+    "goarch": "amd64"
+  },
+  {
+    "version": "20.0.2",
+    "filename": "openjdk-20.0.2_macos-aarch64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.2/openjdk-20.0.2_macos-aarch64_bin.tar.gz",
+    "size": "183 MiB",
+    "last_modified": "2023-06-26 07:00",
+    "goos": "darwin",
+    "goarch": "arm64"
+  },
+  {
+    "version": "20.0.2",
+    "filename": "openjdk-20.0.2_macos-x64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.2/openjdk-20.0.2_macos-x64_bin.tar.gz",
+    "size": "186 MiB",
+    "last_modified": "2023-06-26 06:59",
+    "goos": "darwin",
+    "goarch": "amd64"
+  },
+  {
+    "version": "20.0.2",
+    "filename": "openjdk-20.0.2_windows-x64_bin.zip",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.2/openjdk-20.0.2_windows-x64_bin.zip",
+    "size": "187 MiB",
+    "last_modified": "2023-06-26 07:00",
+    "goos": "windows",
+    "goarch": "amd64"
+  },
+  {
+    "version": "20.0.1",
+    "filename": "openjdk-20.0.1_linux-aarch64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.1/openjdk-20.0.1_linux-aarch64_bin.tar.gz",
+    "size": "187 MiB",
+    "last_modified": "2023-03-30 08:43",
+    "goos": "linux",
+    "goarch": "arm64"
+  },
+  {
+    "version": "20.0.1",
+    "filename": "openjdk-20.0.1_linux-x64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.1/openjdk-20.0.1_linux-x64_bin.tar.gz",
+    "size": "188 MiB",
+    "last_modified": "2023-03-30 08:42",
+    "goos": "linux",
+    "goarch": "amd64"
+  },
+  {
+    "version": "20.0.1",
+    "filename": "openjdk-20.0.1_macos-aarch64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.1/openjdk-20.0.1_macos-aarch64_bin.tar.gz",
+    "size": "183 MiB",
+    "last_modified": "2023-03-30 08:42",
+    "goos": "darwin",
+    "goarch": "arm64"
+  },
+  {
+    "version": "20.0.1",
+    "filename": "openjdk-20.0.1_macos-x64_bin.tar.gz",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.1/openjdk-20.0.1_macos-x64_bin.tar.gz",
+    "size": "185 MiB",
+    "last_modified": "2023-03-30 08:42",
+    "goos": "darwin",
+    "goarch": "amd64"
+  },
+  {
+    "version": "20.0.1",
+    "filename": "openjdk-20.0.1_windows-x64_bin.zip",
+    "url": "https://mirror4.lzu.edu.cn/openjdk/20.0.1/openjdk-20.0.1_windows-x64_bin.zip",
+    "size": "187 MiB",
+    "last_modified": "2023-03-30 08:42",
+    "goos": "windows",
+    "goarch": "amd64"
+  }
+]

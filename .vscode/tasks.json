@@ -1,0 +1,167 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "运行爬虫程序",
+            "type": "shell",
+            "command": "go run main.go",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "运行 Web 服务器",
+            "type": "shell",
+            "command": "go run server.go",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "isBackground": true
+        },
+        {
+            "label": "编译爬虫程序",
+            "type": "shell",
+            "command": "go build -o bin/wget_jdk${os:windows:.exe} main.go",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "编译 Web 服务器",
+            "type": "shell",
+            "command": "go build -o bin/server${os:windows:.exe} server.go",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "编译所有程序",
+            "type": "shell",
+            "command": "go build -o bin/wget_jdk${os:windows:.exe} main.go && go build -o bin/server${os:windows:.exe} server.go",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "清理构建文件",
+            "type": "shell",
+            "command": "rm -rf bin/ tmp/",
+            "windows": {
+                "command": "if exist bin rd /s /q bin && if exist tmp rd /s /q tmp"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "运行测试",
+            "type": "shell",
+            "command": "go test -v ./...",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            },
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "安装依赖",
+            "type": "shell",
+            "command": "go mod tidy",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "格式化代码",
+            "type": "shell",
+            "command": "go fmt ./...",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "silent",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "代码检查",
+            "type": "shell",
+            "command": "go vet ./...",
+            "problemMatcher": ["$go"],
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "在浏览器中打开",
+            "type": "shell",
+            "command": "start http://localhost:8080",
+            "windows": {
+                "command": "start http://localhost:8080"
+            },
+            "linux": {
+                "command": "xdg-open http://localhost:8080"
+            },
+            "osx": {
+                "command": "open http://localhost:8080"
+            },
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "never"
+            }
+        },
+        {
+            "label": "完整工作流：爬取 -> 启动服务 -> 打开浏览器",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "运行爬虫程序",
+                "运行 Web 服务器",
+                "在浏览器中打开"
+            ],
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        }
+    ]
+}
