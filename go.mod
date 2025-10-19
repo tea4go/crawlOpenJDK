@@ -1,4 +1,4 @@
-module wget_jdk
+module crawlOpenJDK
 
 go 1.25.1
 

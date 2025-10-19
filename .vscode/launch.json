@@ -2,11 +2,23 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "运行爬虫程序",
+            "name": "运行爬虫程序 - 兰州大学",
             "type": "go",
             "request": "launch",
             "mode": "debug",
             "program": "${workspaceFolder}/main.go",
+            "args": ["--crawlweb", "--webtype=lzu"],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true
+        },
+        {
+            "name": "运行爬虫程序 - 清华大学",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--crawlweb", "--webtype=tuna"],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "showLog": true
@@ -16,7 +28,8 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/server.go",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--webserver"],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "showLog": true,
@@ -29,13 +42,24 @@
             "type": "go",
             "request": "launch",
             "mode": "debug",
-            "program": "${workspaceFolder}/server.go",
+            "program": "${workspaceFolder}/main.go",
+            "args": ["--webserver"],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}",
             "showLog": true,
             "env": {
                 "PORT": "3000"
             }
+        },
+        {
+            "name": "显示帮助信息",
+            "type": "go",
+            "request": "launch",
+            "mode": "debug",
+            "program": "${workspaceFolder}/main.go",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "showLog": true
         },
         {
             "name": "调试当前文件",

@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -760,38 +763,294 @@ func (s *TWebLzu) ParseWebFileName(filename string) (string, string, string, err
 	return goos, goarch, version, nil
 }
 
+// ============================================================
+// Web Server Functions
+// ============================================================
+
+const (
+	defaultPort = "8080" // 默认端口号
+)
+
+// serveFile 提供静态文件服务
+// 参数:
+//   - w: HTTP 响应写入器
+//   - r: HTTP 请求对象
+func serveFile(w http.ResponseWriter, r *http.Request) {
+	// 获取请求的文件路径
+	filePath := r.URL.Path
+	if filePath == "/" {
+		filePath = "/index.html"
+	}
+
+	// 移除开头的斜杠
+	filePath = filePath[1:]
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		http.Error(w, "文件不存在", http.StatusNotFound)
+		log.Printf("404 - 文件不存在: %s", filePath)
+		return
+	}
+
+	// 设置正确的 Content-Type
+	ext := filepath.Ext(filePath)
+	contentType := getContentType(ext)
+	w.Header().Set("Content-Type", contentType)
+
+	// 设置缓存控制
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	// 提供文件服务
+	http.ServeFile(w, r, filePath)
+	log.Printf("200 - %s %s", r.Method, r.URL.Path)
+}
+
+// getContentType 根据文件扩展名返回 MIME 类型
+// 参数:
+//   - ext: 文件扩展名（如 ".html", ".json"）
+//
+// 返回:
+//   - string: MIME 类型
+func getContentType(ext string) string {
+	contentTypes := map[string]string{
+		".html": "text/html; charset=utf-8",
+		".css":  "text/css; charset=utf-8",
+		".js":   "application/javascript; charset=utf-8",
+		".json": "application/json; charset=utf-8",
+		".png":  "image/png",
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".gif":  "image/gif",
+		".svg":  "image/svg+xml",
+		".ico":  "image/x-icon",
+		".txt":  "text/plain; charset=utf-8",
+		".xml":  "application/xml; charset=utf-8",
+	}
+
+	if contentType, ok := contentTypes[ext]; ok {
+		return contentType
+	}
+	return "application/octet-stream"
+}
+
+// logRequest 记录请求日志的中间件
+// 参数:
+//   - next: 下一个处理器
+//
+// 返回:
+//   - http.HandlerFunc: 包装后的处理器
+func logRequest(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("收到请求: %s %s 来自 %s", r.Method, r.URL.Path, r.RemoteAddr)
+		next(w, r)
+	}
+}
+
+// corsMiddleware 添加 CORS 头部的中间件
+// 参数:
+//   - next: 下一个处理器
+//
+// 返回:
+//   - http.HandlerFunc: 包装后的处理器
+func corsMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// 设置 CORS 头部
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		// 处理 OPTIONS 预检请求
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// printBanner 打印启动横幅
+// 参数:
+//   - port: 服务器端口号
+func printBanner(port string) {
+	banner := `
+╔═══════════════════════════════════════════════════════╗
+║                                                       ║
+║       ☕ OpenJDK 下载中心 - Web 服务器               ║
+║                                                       ║
+╚═══════════════════════════════════════════════════════╝
+
+🚀 服务器启动成功！
+
+📍 访问地址:
+   - 本地访问: http://localhost:%s
+   - 网络访问: http://0.0.0.0:%s
+
+📁 服务文件:
+   - index.html  (主页面)
+   - jdkindex.json (数据文件)
+
+⌨️  按 Ctrl+C 停止服务器
+
+════════════════════════════════════════════════════════
+`
+	fmt.Printf(banner, port, port)
+}
+
+// checkRequiredFiles 检查必需的文件是否存在
+// 返回:
+//   - error: 如果文件缺失则返回错误
+func checkRequiredFiles() error {
+	requiredFiles := []string{"index.html", "jdkindex.json"}
+
+	for _, file := range requiredFiles {
+		if _, err := os.Stat(file); os.IsNotExist(err) {
+			return fmt.Errorf("缺少必需文件: %s", file)
+		}
+	}
+
+	log.Println("✅ 所有必需文件检查通过")
+	return nil
+}
+
+// webserver 启动 Web 服务器
+func webserver() {
+	// 获取端口号（可以从环境变量或使用默认值）
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = defaultPort
+	}
+
+	// 检查必需文件
+	if err := checkRequiredFiles(); err != nil {
+		log.Fatalf("❌ 启动失败: %v", err)
+	}
+
+	// 设置路由
+	http.HandleFunc("/", corsMiddleware(logRequest(serveFile)))
+
+	// 打印启动信息
+	printBanner(port)
+
+	// 启动服务器
+	addr := ":" + port
+	log.Printf("🌐 HTTP 服务器正在监听端口 %s...\n", port)
+
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("❌ 服务器启动失败: %v", err)
+	}
+}
+
+// ============================================================
+// Main Function
+// ============================================================
+
 func main() {
-	fmt.Println("====================================")
-	fmt.Println("OpenJDK 下载地址爬取工具")
-	fmt.Println("====================================")
+	// 定义命令行参数
+	isWebServer := flag.Bool("webserver", false, "启动 Web 服务器模式")
+	isCrawlWeb := flag.Bool("crawlweb", false, "启动爬取 OpenJDK 模式")
+	webType := flag.String("webtype", "lzu", "选择镜像源类型: lzu(兰州大学), tuna(清华大学), injdk(InJDK网站), huawei(华为镜像站)")
 
-	//WebJDK1 := TWebTuna{}
-	//WebJDK1.BaseURL = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/"
+	// 解析命令行参数
+	flag.Parse()
 
-	WebJDK2 := TWebLzu{}
-	WebJDK2.BaseURL = "https://mirror4.lzu.edu.cn/openjdk/"
-	fmt.Println(WebJDK2.BaseURL)
-
-	WebJDK3 := TWebHuawei{}
-	WebJDK3.BaseURL = "https://mirrors.huaweicloud.com/openjdk/"
-	fmt.Println(WebJDK3.BaseURL)
-
-	WebJDK4 := TWebInjdk{}
-	WebJDK4.BaseURL = "https://d10.injdk.cn/openjdk/openjdk/"
-	fmt.Println(WebJDK4.BaseURL)
-
-	// 爬取所有 JDK 下载地址
-	downloads, err := WebJDK2.ParseURL()
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
+	// 如果没有指定任何模式，显示使用帮助
+	if !*isWebServer && !*isCrawlWeb {
+		fmt.Println("====================================")
+		fmt.Println("OpenJDK 下载地址爬取工具")
+		fmt.Println("====================================")
+		fmt.Println("\n使用方法:")
+		fmt.Println("  --webserver    启动 Web 服务器")
+		fmt.Println("  --crawlweb     爬取 OpenJDK 下载地址")
+		fmt.Println("  --webtype      选择镜像源 (lzu/tuna/injdk/huawei)")
+		fmt.Println("\n示例:")
+		fmt.Println("  go run main.go --webserver")
+		fmt.Println("  go run main.go --crawlweb --webtype=lzu")
+		fmt.Println("  go run main.go --crawlweb --webtype=tuna")
+		fmt.Println("  go run main.go --crawlweb --webtype=huawei")
+		fmt.Println("  go run main.go --crawlweb --webtype=injdk")
+		fmt.Println("\n可用的镜像源:")
+		fmt.Println("  lzu    - 兰州大学开源软件镜像站")
+		fmt.Println("  tuna   - 清华大学开源软件镜像站")
+		fmt.Println("  injdk  - InJDK 网站")
+		fmt.Println("  huawei - 华为云镜像站")
+		os.Exit(0)
 	}
 
-	// 保存为 JSON
-	err = saveToJSON(downloads, "jdkindex.json")
-	if err != nil {
-		fmt.Printf("错误: %v\n", err)
-		os.Exit(1)
+	// 启动 Web 服务器模式
+	if *isWebServer {
+		webserver()
+		return
 	}
 
+	// 启动爬取模式
+	if *isCrawlWeb {
+		fmt.Println("====================================")
+		fmt.Println("OpenJDK 下载地址爬取工具")
+		fmt.Println("====================================")
+
+		var downloads []TOpenJDK
+		var err error
+
+		// 根据 webtype 参数选择不同的镜像源
+		switch strings.ToLower(*webType) {
+		case "tuna":
+			fmt.Println("\n📦 使用镜像源: 清华大学 (Tsinghua University)")
+			WebJDK := TWebTuna{}
+			WebJDK.BaseURL = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			downloads, err = WebJDK.ParseURL()
+
+		case "lzu":
+			fmt.Println("\n📦 使用镜像源: 兰州大学 (Lanzhou University)")
+			WebJDK := TWebLzu{}
+			WebJDK.BaseURL = "https://mirror4.lzu.edu.cn/openjdk/"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			downloads, err = WebJDK.ParseURL()
+
+		case "huawei":
+			fmt.Println("\n📦 使用镜像源: 华为云 (Huawei Cloud)")
+			WebJDK := TWebHuawei{}
+			WebJDK.BaseURL = "https://mirrors.huaweicloud.com/openjdk/"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			// 注意: 华为云镜像需要实现 ParseURL() 方法
+			fmt.Println("⚠️  华为云镜像源的 ParseURL() 方法尚未实现")
+			fmt.Println("请先实现 TWebHuawei.ParseURL() 方法")
+			os.Exit(1)
+
+		case "injdk":
+			fmt.Println("\n📦 使用镜像源: InJDK 网站")
+			WebJDK := TWebInjdk{}
+			WebJDK.BaseURL = "https://d10.injdk.cn/openjdk/openjdk/"
+			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
+			// 注意: InJDK 需要实现 ParseURL() 方法
+			fmt.Println("⚠️  InJDK 镜像源的 ParseURL() 方法尚未实现")
+			fmt.Println("请先实现 TWebInjdk.ParseURL() 方法")
+			os.Exit(1)
+
+		default:
+			fmt.Printf("❌ 错误: 未知的镜像源类型 '%s'\n", *webType)
+			fmt.Println("\n可用的镜像源:")
+			fmt.Println("  lzu    - 兰州大学开源软件镜像站")
+			fmt.Println("  tuna   - 清华大学开源软件镜像站")
+			fmt.Println("  injdk  - InJDK 网站")
+			fmt.Println("  huawei - 华为云镜像站")
+			os.Exit(1)
+		}
+
+		// 检查爬取是否出错
+		if err != nil {
+			fmt.Printf("❌ 错误: %v\n", err)
+			os.Exit(1)
+		}
+
+		// 保存为 JSON
+		err = saveToJSON(downloads, "jdkindex.json")
+		if err != nil {
+			fmt.Printf("❌ 错误: %v\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Println("\n✅ 爬取完成！")
+	}
 }

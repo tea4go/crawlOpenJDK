@@ -1,14 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(go mod init wget_jdk)",
-      "Bash(go mod tidy)",
-      "Bash(go run main.go)",
-      "Bash(dir index.html)",
-      "Bash(go run server.go)",
-      "Bash(curl -s http://localhost:8080/)",
-      "Bash(curl -s http://localhost:8080/jdkindex.json)",
-      "Bash(dir .vscode)"
+      "Bash(go run main.go --webserver)",
+      "Bash(dir jdkindex.json)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8080)",
+      "Bash(taskkill /F /PID 55984)",
+      "Bash(powershell -Command \"Stop-Process -Id 55984 -Force\")"
     ],
     "deny": [],
     "ask": []

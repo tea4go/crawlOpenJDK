@@ -2,9 +2,24 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "运行爬虫程序",
+            "label": "运行爬虫程序 - 兰州大学",
             "type": "shell",
-            "command": "go run main.go",
+            "command": "go run main.go --crawlweb --webtype=lzu",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "focus": true
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            }
+        },
+        {
+            "label": "运行爬虫程序 - 清华大学",
+            "type": "shell",
+            "command": "go run main.go --crawlweb --webtype=tuna",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
@@ -19,7 +34,7 @@
         {
             "label": "运行 Web 服务器",
             "type": "shell",
-            "command": "go run server.go",
+            "command": "go run main.go --webserver",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
@@ -153,7 +168,7 @@
             "label": "完整工作流：爬取 -> 启动服务 -> 打开浏览器",
             "dependsOrder": "sequence",
             "dependsOn": [
-                "运行爬虫程序",
+                "运行爬虫程序 - 兰州大学",
                 "运行 Web 服务器",
                 "在浏览器中打开"
             ],
