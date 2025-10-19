@@ -6,7 +6,13 @@
       "Bash(netstat -ano)",
       "Bash(findstr :8080)",
       "Bash(taskkill /F /PID 55984)",
-      "Bash(powershell -Command \"Stop-Process -Id 55984 -Force\")"
+      "Bash(powershell -Command \"Stop-Process -Id 55984 -Force\")",
+      "Read(//d/MyWork/GitCode/wget_jdk/**)",
+      "WebFetch(domain:d10.injdk.cn)",
+      "Bash(go run main.go --crawlweb --webtype=injdk)",
+      "Bash(curl -s \"https://d10.injdk.cn/openjdk/openjdk/11/\")",
+      "Bash(curl -s \"https://d10.injdk.cn/openjdk/openjdk/8/\")",
+      "Bash(cat jdkindex.json)"
     ],
     "deny": [],
     "ask": []

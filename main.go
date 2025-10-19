@@ -309,6 +309,110 @@ func parseFileTable(htmlContent string, pattern string) ([]TWebFileInfo, error) 
 	return files, nil
 }
 
+// parseFileTableInjdk 解析 InJDK 网站的 HTML 表格中的文件信息
+// InJDK 的 HTML 结构:
+//   - 文件名在 <span class="name"> 中
+//   - 文件大小在 <td class="size" data-size="字节数"> 中
+//   - 时间在 <time datetime="ISO格式"> 中
+//
+// 参数:
+//   - htmlContent: HTML 内容字符串
+//   - pattern: 正则表达式模式，用于过滤文件名
+//
+// 返回:
+//   - []TWebFileInfo: 文件信息列表
+//   - error: 错误信息
+func parseFileTableInjdk(htmlContent string, pattern string) ([]TWebFileInfo, error) {
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return nil, fmt.Errorf("解析 HTML 失败: %v", err)
+	}
+
+	var files []TWebFileInfo
+	var re *regexp.Regexp
+	if pattern != "" {
+		re = regexp.MustCompile(pattern)
+	}
+
+	// 递归遍历找到表格行
+	var traverse func(*html.Node)
+	traverse = func(n *html.Node) {
+		// 找到 <tr> 标签
+		if n.Type == html.ElementNode && n.Data == "tr" {
+			var fileName, fileSize, fileDate string
+
+			// 遍历表格列 <td>
+			for td := n.FirstChild; td != nil; td = td.NextSibling {
+				if td.Type == html.ElementNode && td.Data == "td" {
+					// 查找文件名（在 <span class="name"> 中）
+					var findName func(*html.Node)
+					findName = func(node *html.Node) {
+						if node.Type == html.ElementNode && node.Data == "span" {
+							for _, attr := range node.Attr {
+								if attr.Key == "class" && attr.Val == "name" {
+									fileName = getTextContent(node)
+									return
+								}
+							}
+						}
+						for c := node.FirstChild; c != nil; c = c.NextSibling {
+							findName(c)
+						}
+					}
+					findName(td)
+
+					// 查找文件大小（在 data-size 属性中）
+					for _, attr := range td.Attr {
+						if attr.Key == "class" && strings.Contains(attr.Val, "size") {
+							// 查找 data-size 属性
+							for _, sizeAttr := range td.Attr {
+								if sizeAttr.Key == "data-size" {
+									fileSize = sizeAttr.Val
+									break
+								}
+							}
+						}
+					}
+
+					// 查找时间（在 <time datetime=""> 中）
+					var findTime func(*html.Node)
+					findTime = func(node *html.Node) {
+						if node.Type == html.ElementNode && node.Data == "time" {
+							for _, attr := range node.Attr {
+								if attr.Key == "datetime" {
+									fileDate = attr.Val
+									return
+								}
+							}
+						}
+						for c := node.FirstChild; c != nil; c = c.NextSibling {
+							findTime(c)
+						}
+					}
+					findTime(td)
+				}
+			}
+
+			// 如果找到文件名且匹配模式，添加到列表
+			if fileName != "" && (re == nil || re.MatchString(fileName)) {
+				files = append(files, TWebFileInfo{
+					Name:         fileName,
+					LastModified: fileDate,
+					Size:         fileSize,
+				})
+			}
+		}
+
+		// 遍历子节点
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			traverse(c)
+		}
+	}
+
+	traverse(doc)
+	return files, nil
+}
+
 // getTextContent 获取节点的文本内容
 // 参数:
 //   - n: HTML 节点
@@ -331,20 +435,27 @@ func getTextContent(n *html.Node) string {
 //   - []string: 版本目录列表
 //   - error: 错误信息
 func getVerDirs(url string) ([]string, error) {
-	fmt.Println("正在获取版本目录列表...")
+	fmt.Println("正在获取版本目录列表...", url)
 	htmlContent, err := fetchHTML(url)
 	if err != nil {
 		return nil, err
 	}
 
-	// 匹配数字开头的目录，例如 "25/"
-	links, err := parseLinks(htmlContent, `^\d+(?:\.\d+)*/$`)
+	// 匹配数字开头的目录，支持 "25/" 或 "./25/" 格式
+	links, err := parseLinks(htmlContent, `^(?:\./)?(\d+(?:\.\d+)*)/$`)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("找到 %d 个版本目录\n", len(links))
-	return links, nil
+	// 清理链接，移除 "./" 前缀
+	var cleanLinks []string
+	for _, link := range links {
+		cleanLink := strings.TrimPrefix(link, "./")
+		cleanLinks = append(cleanLinks, cleanLink)
+	}
+
+	fmt.Printf("找到 %d 个版本目录\n", len(cleanLinks))
+	return cleanLinks, nil
 }
 
 // getJDKDirectory 获取 jdk/ 目录
@@ -763,6 +874,204 @@ func (s *TWebLzu) ParseWebFileName(filename string) (string, string, string, err
 	return goos, goarch, version, nil
 }
 
+// ParseURL 爬取所有 InJDK JDK 下载地址
+// 目录层次:
+//   - /openjdk/11.0.2/openjdk-11.0.2_windows-x64_bin.zip
+//
+// 返回:
+//   - []TOpenJDK: 所有 JDK 下载条目
+//   - error: 错误信息
+func (s *TWebInjdk) ParseURL() ([]TOpenJDK, error) {
+	var allDownloads []TOpenJDK
+
+	// 1. 获取版本目录
+	versions, err := getVerDirs(s.BaseURL)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("getVerDirs", len(versions))
+	// 2. 遍历每个版本
+	for _, version := range versions {
+		versionURL := s.BaseURL + version
+		// 去除版本号中的 '/' 字符用于显示
+		versionDisplay := strings.TrimSuffix(version, "/")
+		fmt.Println("==================================================")
+		fmt.Printf("-= 处理 JDK %s 版本 =-\n", versionDisplay)
+		fmt.Println("==================================================")
+
+		// 3. 获取 JDK 文件
+		downloads, err := s.GetJDKFiles(versionURL)
+		if err != nil {
+			fmt.Printf("        获取文件失败: %v\n", err)
+			continue
+		}
+
+		// 打印找到的 OpenJDK 信息
+		if len(downloads) > 0 {
+			for _, jdk := range downloads {
+				fmt.Printf("%s\n", jdk.String())
+			}
+		}
+		allDownloads = append(allDownloads, downloads...)
+	}
+
+	return allDownloads, nil
+}
+
+// GetJDKFiles 获取指定 URL 中的所有 JDK 文件下载地址及详细信息
+// 参数:
+//   - fileURL: 文件列表页面的 URL
+//
+// 返回:
+//   - []TOpenJDK: JDK 下载条目列表
+//   - error: 错误信息
+func (s *TWebInjdk) GetJDKFiles(fileURL string) ([]TOpenJDK, error) {
+	htmlContent, err := fetchHTML(fileURL)
+	if err != nil {
+		return nil, err
+	}
+
+	// 使用 InJDK 专用的解析函数，匹配 .zip 和 .tar.gz 文件
+	files, err := parseFileTableInjdk(htmlContent, `\.(zip|tar\.gz)$`)
+	if err != nil {
+		return nil, err
+	}
+
+	var downloads []TOpenJDK
+	for _, file := range files {
+		// 从文件名中提取版本号
+		version := extractVersion(file.Name)
+
+		// 格式化时间（InJDK 使用 ISO 8601 格式）
+		formattedTime := parseTime(file.LastModified)
+
+		goos, goarch, _, err := s.ParseWebFileName(file.Name)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		downloads = append(downloads, TOpenJDK{
+			Version:      version,
+			Filename:     file.Name,
+			URL:          fileURL + file.Name,
+			Size:         formatFileSize(file.Size),
+			LastModified: formattedTime,
+			GOOS:         goos,
+			GOARCH:       goarch,
+		})
+	}
+
+	return downloads, nil
+}
+
+// ParseWebFileName 解析文件名获取GOOS、GOARCH和版本信息
+// 支持两种格式:
+//   - 标准格式: openjdk-10.0.1_windows-x64_bin.tar.gz
+//   - JDK8格式: openjdk-8u43-linux-x64.tar.gz
+//
+// 返回:Goos,Arch,Version,error
+func (s *TWebInjdk) ParseWebFileName(filename string) (string, string, string, error) {
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return "", "", "", fmt.Errorf("文件名不能为空")
+	}
+
+	// 跳过源代码文件（如 openjdk-11+28_src.zip, openjdk-8u41-src-b04-14_jan_2020.zip）
+	if strings.Contains(filename, "_src.") || strings.Contains(filename, "-src-") {
+		return "", "", "", fmt.Errorf("跳过源代码文件(%s)", filename)
+	}
+
+	// 移除文件扩展名
+	nameWithoutExt := strings.TrimSuffix(filename, ".tar.gz")
+	nameWithoutExt = strings.TrimSuffix(nameWithoutExt, ".zip")
+
+	// 检查是否是 JDK 8 格式（使用 - 分隔）
+	// 格式1: openjdk-8u43-linux-x64
+	// 格式2: openjdk-8u41-b04-windows-i586-14_jan_2020
+	if strings.Contains(nameWithoutExt, "openjdk-8") {
+		parts := strings.Split(nameWithoutExt, "-")
+		if len(parts) >= 4 {
+			var version, goos, goarch string
+
+			// 格式2: openjdk-8u41-b04-windows-i586-14_jan_2020
+			if len(parts) >= 5 && strings.HasPrefix(parts[2], "b") {
+				// parts: ["openjdk", "8u41", "b04", "windows", "i586", "14_jan_2020"]
+				version = parts[1]
+				goos = parts[3]
+				goarch = parts[4]
+			} else {
+				// 格式1: openjdk-8u43-linux-x64
+				// parts: ["openjdk", "8u43", "linux", "x64"]
+				version = parts[1]
+				goos = parts[2]
+				goarch = parts[3]
+			}
+
+			// 标准化GOOS值
+			goos = strings.ReplaceAll(goos, "osx", "darwin")
+			goos = strings.ReplaceAll(goos, "macos", "darwin")
+			switch goos {
+			case "linux", "darwin", "windows":
+				// 已经是标准值
+			default:
+				return "", "", "", fmt.Errorf("未知操作系统(%s)", goos)
+			}
+
+			// 标准化GOARCH值
+			goarch = strings.ReplaceAll(goarch, "aarch64", "arm64")
+			goarch = strings.ReplaceAll(goarch, "i586", "386")
+			switch goarch {
+			case "x64", "amd64", "arm64", "aarch64", "386":
+				if goarch == "x64" {
+					goarch = "amd64"
+				}
+			default:
+				return "", "", "", fmt.Errorf("未知系统架构(%s)", goarch)
+			}
+
+			return goos, goarch, version, nil
+		}
+	}
+
+	// 标准格式（使用 _ 分隔）: openjdk-10.0.1_windows-x64_bin
+	filenameParts := strings.Split(filename, "_")
+	if len(filenameParts) < 3 {
+		return "", "", "", fmt.Errorf("文件名格式错误(%s)", filename)
+	}
+
+	version := strings.TrimPrefix(filenameParts[0], "openjdk-")
+	filenameParts1 := strings.Split(filenameParts[1], "-")
+	var goos, goarch string
+	if len(filenameParts1) > 1 {
+		goos = filenameParts1[0]
+		goarch = filenameParts1[1]
+	}
+
+	// 标准化GOOS值
+	goos = strings.ReplaceAll(goos, "osx", "darwin")
+	goos = strings.ReplaceAll(goos, "macos", "darwin")
+	switch goos {
+	case "linux", "darwin", "windows":
+		// 已经是标准值
+	default:
+		return "", "", "", fmt.Errorf("未知操作系统(%s)", goos)
+	}
+
+	// 标准化GOARCH值
+	goarch = strings.ReplaceAll(goarch, "aarch64", "arm64")
+	switch goarch {
+	case "x64", "amd64", "arm64", "aarch64":
+		if goarch == "x64" {
+			goarch = "amd64" // Go标准中使用amd64而不是x64
+		}
+	default:
+		return "", "", "", fmt.Errorf("未知系统架构(%s)", goarch)
+	}
+
+	return goos, goarch, version, nil
+}
+
 // ============================================================
 // Web Server Functions
 // ============================================================
@@ -788,7 +1097,7 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 	// 检查文件是否存在
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		http.Error(w, "文件不存在", http.StatusNotFound)
-		log.Printf("404 - 文件不存在: %s", filePath)
+		fmt.Printf("404 - 文件不存在: %s\n", filePath)
 		return
 	}
 
@@ -802,7 +1111,7 @@ func serveFile(w http.ResponseWriter, r *http.Request) {
 
 	// 提供文件服务
 	http.ServeFile(w, r, filePath)
-	log.Printf("200 - %s %s", r.Method, r.URL.Path)
+	fmt.Printf("200 - %s %s\n", r.Method, r.URL.Path)
 }
 
 // getContentType 根据文件扩展名返回 MIME 类型
@@ -841,7 +1150,7 @@ func getContentType(ext string) string {
 //   - http.HandlerFunc: 包装后的处理器
 func logRequest(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("收到请求: %s %s 来自 %s", r.Method, r.URL.Path, r.RemoteAddr)
+		fmt.Printf("收到请求: %s %s 来自 %s\n", r.Method, r.URL.Path, r.RemoteAddr)
 		next(w, r)
 	}
 }
@@ -934,7 +1243,7 @@ func webserver() {
 
 	// 启动服务器
 	addr := ":" + port
-	log.Printf("🌐 HTTP 服务器正在监听端口 %s...\n", port)
+	fmt.Printf("🌐 HTTP 服务器正在监听端口 %s...\n", port)
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("❌ 服务器启动失败: %v", err)
@@ -1023,10 +1332,7 @@ func main() {
 			WebJDK := TWebInjdk{}
 			WebJDK.BaseURL = "https://d10.injdk.cn/openjdk/openjdk/"
 			fmt.Printf("🔗 镜像地址: %s\n\n", WebJDK.BaseURL)
-			// 注意: InJDK 需要实现 ParseURL() 方法
-			fmt.Println("⚠️  InJDK 镜像源的 ParseURL() 方法尚未实现")
-			fmt.Println("请先实现 TWebInjdk.ParseURL() 方法")
-			os.Exit(1)
+			downloads, err = WebJDK.ParseURL()
 
 		default:
 			fmt.Printf("❌ 错误: 未知的镜像源类型 '%s'\n", *webType)
