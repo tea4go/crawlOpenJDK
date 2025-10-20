@@ -34,8 +34,10 @@ type TOpenJDK struct {
 // 返回:
 //   - string: 格式化的 OpenJDK 信息字符串
 func (jdk TOpenJDK) String() string {
-	return fmt.Sprintf("OpenJDK %-10s | 系统: %-10s | 架构: %-10s | 大小: %-10s | 文件: %s",
-		jdk.Version, jdk.GOOS, jdk.GOARCH, jdk.Size, jdk.Filename)
+	javaname := fmt.Sprintf("OpenJDK%s.%s-%s", jdk.Version, jdk.GOOS, jdk.GOARCH)
+	sizetext := strings.ReplaceAll(jdk.Size, "i", "")
+	return fmt.Sprintf("%-35s | %-10s | %s",
+		javaname, sizetext, jdk.Filename)
 }
 
 // 清华大学开源软件镜像站
@@ -1313,9 +1315,9 @@ func (s *TWebAzul) ParseURL() ([]TOpenJDK, error) {
 
 	// 支持的操作系统和架构组合
 	targets := []struct {
-		os   string
-		arch string
-		goos string
+		os     string
+		arch   string
+		goos   string
 		goarch string
 	}{
 		{"windows", "x86", "windows", "amd64"},
